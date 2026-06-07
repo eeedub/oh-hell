@@ -94,12 +94,13 @@ Average final score:  147.6
 Hit rate by hand size:
    1 card(s):  68.2%  ##############
   ...
-  12 card(s):  40.9%  ########
+  12 card(s):  45.1%  #########
 ```
 
-The per-hand-size breakdown is the useful part: the current bot bids well in
-small hands but gets much less accurate in large ones — a sign that its *card
-play* (not its bidding) is the next thing worth improving.
+The per-hand-size breakdown is the useful part: the bot bids most accurately in
+small hands and less so in large ones, where *card play* decides whether you
+hit your bid. The harness is what made it safe to improve that play — see
+below.
 
 To A/B-test a new strategy against the current one, use `compare` from Python.
 It seats equal numbers of each bot at shared tables (swapping seats to cancel
@@ -116,9 +117,18 @@ result = compare(MyBot, AIPlayer, games=2000)
 print(result.candidate_hit_rate, "vs", result.baseline_hit_rate)
 ```
 
-> Lesson from this project: an intuitive "improvement" to the bidding (reacting
-> to the running bid total) turned out to make the bot slightly *worse* when
-> measured. Always benchmark the change instead of trusting the intuition.
+Two lessons this harness taught the project, both by measurement:
+
+> An intuitive bidding "improvement" (reacting to the running bid total) turned
+> out to make the bot slightly *worse*, so it was dropped.
+
+> A card-play change — once you've made your bid, "duck high" by shedding your
+> most dangerous card on tricks you don't want, instead of always your lowest —
+> raised the head-to-head hit rate by about **4 points** and was kept. (A first
+> version of it actually *lost* points by throwing away cards the bot still
+> needed; the benchmark caught that before it shipped.)
+
+Always benchmark the change instead of trusting the intuition.
 
 ## The hook rule
 

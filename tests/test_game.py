@@ -1,6 +1,6 @@
 import pytest
 
-from oh_hell.cards import Suit
+from oh_hell.cards import Card, Suit
 from oh_hell.game import Game, deal_pattern, max_hand_size
 from oh_hell.player import AIPlayer, Player
 
@@ -76,6 +76,35 @@ def test_hook_forbids_dealer_balancing_bid():
     # Round 1 dealer is player A (index 0); only the dealer sees a forbidden bid.
     assert seen["A"] is not None
     assert seen["B"] is None and seen["C"] is None
+
+
+def _losing_trick():
+    """A trick where Ace of hearts leads — our hearts below it all lose."""
+    return [(AIPlayer("opp"), Card(14, Suit.HEARTS))]
+
+
+def test_made_bid_ducks_with_highest_loser():
+    # Bid already made (want no more tricks). We can't beat the A♥, so we should
+    # shed our most dangerous losing card (the K♥), not the harmless 3♥.
+    p = AIPlayer("me")
+    p.bid, p.tricks_won = 0, 0
+    p.hand = [Card(13, Suit.HEARTS), Card(3, Suit.HEARTS)]
+    card = p.choose_card(
+        legal=list(p.hand), trick=_losing_trick(), trump=Suit.SPADES, lead_suit=Suit.HEARTS, seen=[]
+    )
+    assert card == Card(13, Suit.HEARTS)
+
+
+def test_still_chasing_keeps_high_card():
+    # Same trick, but we still need a trick. We can't win this one, so we should
+    # play low and hold on to the K♥ for later.
+    p = AIPlayer("me")
+    p.bid, p.tricks_won = 1, 0
+    p.hand = [Card(13, Suit.HEARTS), Card(3, Suit.HEARTS)]
+    card = p.choose_card(
+        legal=list(p.hand), trick=_losing_trick(), trump=Suit.SPADES, lead_suit=Suit.HEARTS, seen=[]
+    )
+    assert card == Card(3, Suit.HEARTS)
 
 
 def test_rejects_bad_player_count():

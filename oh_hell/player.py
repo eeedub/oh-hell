@@ -49,6 +49,7 @@ class Player:
         trick: list[tuple["Player", Card]],
         trump: Suit,
         lead_suit: Suit | None,
+        seen: list[Card],
     ) -> Card:
         raise NotImplementedError
 
@@ -94,7 +95,9 @@ class AIPlayer(Player):
             return 0.25
         return 0.0
 
-    def choose_card(self, *, legal, trick, trump, lead_suit):
+    def choose_card(self, *, legal, trick, trump, lead_suit, seen):
+        # ``seen`` (cards already played this round) is available for strategies
+        # that want to count cards; this heuristic doesn't need it.
         needs_more = self.tricks_won < self.bid
 
         # Cards currently on the table, in play order.
@@ -107,16 +110,24 @@ class AIPlayer(Player):
                 else self._weakest(legal, trump, lead_suit=None)
 
         current_lead = trick[0][1].suit
-        winning_idx = trick_winner_index(played, trump)
-        winning_card = played[winning_idx]
-
+        winning_card = played[trick_winner_index(played, trump)]
         winners = [c for c in legal if self._beats(c, winning_card, trump, current_lead)]
 
-        if needs_more and winners:
-            # Win as cheaply as possible.
-            return min(winners, key=lambda c: card_strength(c, trump, current_lead))
-        # Either we don't want the trick, or we can't win it: dump our lowest.
-        return self._weakest(legal, trump, lead_suit=current_lead)
+        if needs_more:
+            # Still chasing tricks: win as cheaply as possible if we can,
+            # otherwise play low and keep our high cards for a later trick.
+            if winners:
+                return min(winners, key=lambda c: card_strength(c, trump, current_lead))
+            return self._weakest(legal, trump, lead_suit=current_lead)
+
+        # We've made our bid and want no more tricks. "Duck high": play the
+        # highest card that still loses, shedding whatever is most likely to win
+        # an unwanted trick later. If every legal card would win, take it as
+        # cheaply as possible.
+        losers = [c for c in legal if c not in winners]
+        if losers:
+            return max(losers, key=lambda c: self._card_value(c, trump))
+        return min(legal, key=lambda c: card_strength(c, trump, current_lead))
 
     # --- helpers ---------------------------------------------------------
     @staticmethod
@@ -163,7 +174,7 @@ class HumanPlayer(Player):
                 continue
             return bid
 
-    def choose_card(self, *, legal, trick, trump, lead_suit):
+    def choose_card(self, *, legal, trick, trump, lead_suit, seen):
         if trick:
             table = "  ".join(f"{p.name}:{c}" for p, c in trick)
             self._output(f"\nOn the table: {table}")

@@ -172,6 +172,7 @@ class Game:
     def _play_tricks(self, hand_size: int, dealer_index: int, trump: Suit) -> None:
         n = len(self.players)
         leader = (dealer_index + 1) % n  # player left of dealer leads first
+        seen: list[Card] = []  # cards played in completed tricks this round
         for trick_no in range(hand_size):
             trick: list[tuple[Player, Card]] = []
             lead_suit: Suit | None = None
@@ -179,7 +180,11 @@ class Game:
                 player = self.players[(leader + offset) % n]
                 legal = legal_plays(player.hand, lead_suit)
                 card = player.choose_card(
-                    legal=legal, trick=list(trick), trump=trump, lead_suit=lead_suit
+                    legal=legal,
+                    trick=list(trick),
+                    trump=trump,
+                    lead_suit=lead_suit,
+                    seen=list(seen),
                 )
                 if card not in legal:
                     raise ValueError(f"{player.name} played illegal card {card}")
@@ -188,6 +193,7 @@ class Game:
                     lead_suit = card.suit
                 trick.append((player, card))
 
+            seen.extend(c for _, c in trick)
             win_offset = trick_winner_index([c for _, c in trick], trump)
             winner = trick[win_offset][0]
             winner.tricks_won += 1
