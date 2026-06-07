@@ -14,6 +14,7 @@ import argparse
 import sys
 from collections import Counter
 
+from .benchmark import run_benchmark
 from .game import Game, max_hand_size
 from .player import AIPlayer, HumanPlayer
 
@@ -70,6 +71,33 @@ def cmd_play(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_bench(args: argparse.Namespace) -> int:
+    # A fixed seed by default keeps the benchmark reproducible run-to-run.
+    seed = 0 if args.seed is None else args.seed
+    result = run_benchmark(
+        games=args.games,
+        players=args.players,
+        pattern=args.pattern,
+        hook=not args.no_hook,
+        seed=seed,
+    )
+    pattern = args.pattern or "1..max..1 (default)"
+    print(
+        f"Benchmark: {args.games} games, {args.players} players, "
+        f"pattern {pattern}, hook {'off' if args.no_hook else 'on'}, seed {seed}"
+    )
+    print(
+        f"  Exact-bid hit rate : {100 * result.hit_rate:5.1f}%  "
+        f"({result.exact_bids}/{result.rounds} rounds)"
+    )
+    print(f"  Average final score: {result.avg_score:6.1f}")
+    print("  Hit rate by hand size:")
+    for size, (exact, rounds) in result.by_hand_size.items():
+        bar = "#" * round(20 * exact / rounds) if rounds else ""
+        print(f"    {size:2d} card(s): {100 * exact / rounds:5.1f}%  {bar}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="oh-hell",
@@ -96,6 +124,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(play)
     play.add_argument("--name", default=None, help="your display name")
     play.set_defaults(func=cmd_play)
+
+    bench = sub.add_parser("bench", help="measure bot quality (exact-bid hit rate)")
+    add_common(bench)
+    bench.add_argument("-n", "--games", type=int, default=1000, help="number of games to run")
+    bench.set_defaults(func=cmd_bench)
 
     return parser
 

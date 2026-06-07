@@ -34,6 +34,9 @@ python -m oh_hell play
 
 # Simulate 1000 games and see how often each seat wins
 python -m oh_hell simulate --games 1000
+
+# Measure how good the bot is (exact-bid hit rate)
+python -m oh_hell bench
 ```
 
 Or install it so the `oh-hell` command is available everywhere:
@@ -45,7 +48,7 @@ oh-hell play
 
 ## Command reference
 
-Both subcommands share these options:
+There are three subcommands: `simulate`, `play`, and `bench`. They share these options:
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -73,6 +76,50 @@ waypoint to the next:
 Hand sizes are automatically clamped to what a 52-card deck allows for the
 player count (one card is always reserved to flip for trump).
 
+## Measuring the bot (benchmarking)
+
+How do you know whether a change to the bot actually made it *better*? You
+measure it. The `bench` command plays many games and reports the **exact-bid
+hit rate** — the fraction of rounds where a player took exactly as many tricks
+as they bid. That's where the big +10 bonus comes from, and unlike the win rate
+it doesn't depend on the opponents, so it cleanly reflects skill.
+
+```bash
+python -m oh_hell bench --games 1000
+```
+
+```
+Exact-bid hit rate :  48.5%  (...)
+Average final score:  147.6
+Hit rate by hand size:
+   1 card(s):  68.2%  ##############
+  ...
+  12 card(s):  40.9%  ########
+```
+
+The per-hand-size breakdown is the useful part: the current bot bids well in
+small hands but gets much less accurate in large ones — a sign that its *card
+play* (not its bidding) is the next thing worth improving.
+
+To A/B-test a new strategy against the current one, use `compare` from Python.
+It seats equal numbers of each bot at shared tables (swapping seats to cancel
+positional bias) and reports both hit rates:
+
+```python
+from oh_hell.benchmark import compare
+from oh_hell.player import AIPlayer
+
+class MyBot(AIPlayer):
+    ...  # override choose_bid / choose_card
+
+result = compare(MyBot, AIPlayer, games=2000)
+print(result.candidate_hit_rate, "vs", result.baseline_hit_rate)
+```
+
+> Lesson from this project: an intuitive "improvement" to the bidding (reacting
+> to the running bid total) turned out to make the bot slightly *worse* when
+> measured. Always benchmark the change instead of trusting the intuition.
+
 ## The hook rule
 
 "The hook" (on by default) forbids the **dealer** from making a bid that would
@@ -86,10 +133,11 @@ guarantees at least one player misses their bid each round. Turn it off with
 oh_hell/
   cards.py    # Card, Suit, Deck
   rules.py    # pure rule helpers (legal plays, trick winner)
-  player.py   # Player base class, AIPlayer bot, HumanPlayer
-  game.py     # the game engine: dealing, bidding, tricks, scoring
-  cli.py      # command-line interface
-tests/        # pytest suite
+  player.py    # Player base class, AIPlayer bot, HumanPlayer
+  game.py      # the game engine: dealing, bidding, tricks, scoring
+  benchmark.py # measure/compare bot strategies (exact-bid hit rate)
+  cli.py       # command-line interface
+tests/         # pytest suite
 ```
 
 The engine is usable as a library too:
