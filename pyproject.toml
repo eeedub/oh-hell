@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oh-hell"
+version = "0.1.0"
+description = "A simulator for the trick-taking card game Oh Hell."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "eeedub" }]
+keywords = ["card-game", "oh-hell", "trick-taking", "simulator", "game"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Games/Entertainment",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+oh-hell = "oh_hell.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/eeedub/oh-hell"
+
+[tool.setuptools]
+packages = ["oh_hell"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

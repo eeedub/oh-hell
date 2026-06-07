@@ -1,0 +1,114 @@
+# Oh Hell 🃏
+
+A simulator for the classic trick-taking card game **Oh Hell** (also known as
+Oh Pshaw, Blackout, Blob, or Bust). You can watch AI bots play complete games,
+run thousands of games to gather statistics, or sit down and play against the
+bots yourself in the terminal.
+
+The rules follow the
+[Official Game Rules for Oh Hell](https://officialgamerules.org/game-rules/oh-hell/).
+
+Pure Python, no dependencies — just the standard library. `pytest` is only
+needed if you want to run the tests.
+
+## The game in one paragraph
+
+Each round, every player is dealt a hand (the size changes from round to round).
+One extra card is flipped to set the **trump** suit. Players then **bid** the
+*exact* number of tricks they think they'll win. You play out the tricks
+(follow the led suit if you can; the highest trump wins, otherwise the highest
+card of the led suit). You score **1 point per trick taken, plus a 10-point
+bonus if you took exactly as many tricks as you bid**. Highest total after the
+final round wins.
+
+## Quick start
+
+No install required:
+
+```bash
+# Watch four bots play one game, with full play-by-play
+python -m oh_hell simulate
+
+# Play against three bots
+python -m oh_hell play
+
+# Simulate 1000 games and see how often each seat wins
+python -m oh_hell simulate --games 1000
+```
+
+Or install it so the `oh-hell` command is available everywhere:
+
+```bash
+pip install -e .
+oh-hell play
+```
+
+## Command reference
+
+Both subcommands share these options:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `-p, --players N` | `4` | Number of players (2–7; 3–7 recommended) |
+| `--pattern SPEC` | `1..max..1` | Cards-per-round pattern, e.g. `10..1..10` or `1..7` |
+| `--no-hook` | off | Disable "the hook" (the dealer's bid restriction) |
+| `--seed N` | random | Seed the RNG for reproducible games |
+
+```bash
+# A short 3-player game that climbs 1→5 and back to 1, no hook rule
+python -m oh_hell simulate -p 3 --pattern "1..5..1" --no-hook
+
+# Reproduce an exact game
+python -m oh_hell simulate --seed 42
+```
+
+### Deal patterns
+
+A pattern is a list of waypoints joined by `..`. The game counts from one
+waypoint to the next:
+
+- `10..1..10` → 10, 9, 8, …, 1, 2, …, 10
+- `1..7` → 1, 2, 3, 4, 5, 6, 7
+
+Hand sizes are automatically clamped to what a 52-card deck allows for the
+player count (one card is always reserved to flip for trump).
+
+## The hook rule
+
+"The hook" (on by default) forbids the **dealer** from making a bid that would
+cause the total of all bids to equal the number of tricks in the round. This
+guarantees at least one player misses their bid each round. Turn it off with
+`--no-hook`.
+
+## Project layout
+
+```
+oh_hell/
+  cards.py    # Card, Suit, Deck
+  rules.py    # pure rule helpers (legal plays, trick winner)
+  player.py   # Player base class, AIPlayer bot, HumanPlayer
+  game.py     # the game engine: dealing, bidding, tricks, scoring
+  cli.py      # command-line interface
+tests/        # pytest suite
+```
+
+The engine is usable as a library too:
+
+```python
+from oh_hell import Game, AIPlayer
+
+game = Game([AIPlayer(n) for n in "ABCD"], pattern="5..1..5", seed=1)
+game.play()
+print(game.winner.name, game.winner.score)
+```
+
+## Running the tests
+
+```bash
+pip install pytest
+pytest
+```
+
+## License
+
+[MIT](LICENSE)
