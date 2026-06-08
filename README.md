@@ -74,8 +74,9 @@ python -m oh_hell simulate --seed 42
 ### Output & color
 
 The `simulate` (single game) and `play` commands print a colorized play-by-play:
-cards are colored by suit (♥ red, ♦ blue, ♣ green, ♠ default), the trick winner
-and made bids are highlighted, and the final standings use 🥇🥈🥉 / 🏆. Color
+each round starts with a boxed header, cards are colored by suit (♥ red, ♦ blue,
+♣ green, ♠ default), the trick winner and made bids are highlighted, and the
+final standings use 🥇🥈🥉 / 🏆. Color
 turns on automatically only when writing to a terminal, so piped or redirected
 output stays plain (it also respects the `NO_COLOR` convention). Force it with
 `--color always` or disable it with `--color never`.

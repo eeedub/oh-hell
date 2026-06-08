@@ -16,15 +16,23 @@ because they are double-width and would break column alignment.
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 from .cards import Card, Suit
 
 RESET = "\033[0m"
 
+_ANSI_RE = re.compile(r"\033\[[0-9;]*m")
+
 
 def _sgr(*codes: int) -> str:
     return "".join(f"\033[{c}m" for c in codes)
+
+
+def visible_len(text: str) -> int:
+    """Length of ``text`` as displayed, ignoring ANSI color escape codes."""
+    return len(_ANSI_RE.sub("", text))
 
 
 # Foreground color per suit (empty string = leave at the terminal default).
@@ -85,3 +93,19 @@ class Renderer:
 
     def accent(self, text: str) -> str:
         return self._style(text, _sgr(36))
+
+    # --- layout ----------------------------------------------------------
+    def box(self, text: str, pad: int = 1) -> str:
+        """Draw a single-line box around ``text``.
+
+        The width is computed from the *visible* length, so the border lines up
+        even when ``text`` contains color codes. The border is dimmed so the
+        content inside stands out.
+        """
+        inner = pad + visible_len(text) + pad
+        gap = " " * pad
+        top = self.dim("┌" + "─" * inner + "┐")
+        bottom = self.dim("└" + "─" * inner + "┘")
+        bar = self.dim("│")
+        middle = f"{bar}{gap}{text}{gap}{bar}"
+        return f"{top}\n{middle}\n{bottom}"
