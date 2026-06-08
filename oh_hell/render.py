@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import sys
 
 from .cards import Card, Suit
@@ -59,8 +60,10 @@ def should_color(mode: str = "auto", stream=None) -> bool:
 class Renderer:
     """Wraps text in ANSI styles when ``enabled``; otherwise returns it plain."""
 
-    def __init__(self, enabled: bool = True) -> None:
+    def __init__(self, enabled: bool = True, width: int | None = None) -> None:
         self.enabled = enabled
+        # Width for full-span rules; defaults to the terminal width.
+        self.width = width or shutil.get_terminal_size((80, 24)).columns
 
     def _style(self, text: str, *codes: str) -> str:
         codes = tuple(c for c in codes if c)
@@ -95,17 +98,6 @@ class Renderer:
         return self._style(text, _sgr(36))
 
     # --- layout ----------------------------------------------------------
-    def box(self, text: str, pad: int = 1) -> str:
-        """Draw a single-line box around ``text``.
-
-        The width is computed from the *visible* length, so the border lines up
-        even when ``text`` contains color codes. The border is dimmed so the
-        content inside stands out.
-        """
-        inner = pad + visible_len(text) + pad
-        gap = " " * pad
-        top = self.dim("┌" + "─" * inner + "┐")
-        bottom = self.dim("└" + "─" * inner + "┘")
-        bar = self.dim("│")
-        middle = f"{bar}{gap}{text}{gap}{bar}"
-        return f"{top}\n{middle}\n{bottom}"
+    def rule(self, width: int | None = None) -> str:
+        """A dimmed horizontal rule spanning ``width`` columns (default: full)."""
+        return self.dim("─" * (width if width is not None else self.width))

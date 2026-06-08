@@ -37,20 +37,14 @@ def test_visible_len_ignores_color_codes():
     assert visible_len(r.bold("hello")) == 5
 
 
-def test_box_borders_match_content_width():
+def test_rule_spans_requested_width():
     r = Renderer(enabled=False)
-    top, middle, bottom = r.box("Round 1").splitlines()
-    # Box is sized to the content plus one space of padding on each side.
-    assert top == "┌─────────┐"
-    assert middle == "│ Round 1 │"
-    assert bottom == "└─────────┘"
+    assert r.rule(10) == "─" * 10
 
 
-def test_box_width_correct_even_with_color():
-    r = Renderer(enabled=True)
-    top, middle, bottom = r.box(r.bold("Round 1")).splitlines()
-    # Borders are measured by visible width, so top and bottom still match.
-    assert visible_len(top) == visible_len(bottom) == visible_len(middle)
+def test_rule_defaults_to_renderer_width():
+    r = Renderer(enabled=False, width=42)
+    assert visible_len(r.rule()) == 42
 
 
 def test_should_color_respects_no_color_env(monkeypatch):

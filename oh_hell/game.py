@@ -141,11 +141,11 @@ class Game:
         r = self.renderer
         plural = "s" if hand_size != 1 else ""
         header = (
-            f"{r.bold(f'Round {round_number}')}  ·  {hand_size} card{plural} each"
+            f"  {r.bold(f'Round {round_number}')}  ·  {hand_size} card{plural} each"
             f"  ·  trump {r.suit(trump)} {r.card(trump_card)}"
             f"  ·  dealer {self.players[dealer_index].name}"
         )
-        self._say("\n" + r.box(header))
+        self._say(f"\n{r.rule()}\n{header}\n{r.rule()}")
 
         self._collect_bids(hand_size, dealer_index, trump)
         self._play_tricks(hand_size, dealer_index, trump)
