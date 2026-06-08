@@ -60,7 +60,7 @@ There are three subcommands: `simulate`, `play`, and `bench`. They share these o
 | `--no-hook` | off | Disable "the hook" (the dealer's bid restriction) |
 | `--seed N` | random | Seed the RNG for reproducible games |
 | `--bot {greedy,mc}` | `greedy` | Bot strategy (see [Bot strategies](#bot-strategies)) |
-| `--mc-samples N` | `60` | Rollouts per card for the `mc` bot (higher = stronger, slower) |
+| `--mc-samples N` | `30` | Rollouts for the `mc` bot (higher = stronger, slower) |
 | `--color {auto,always,never}` | `auto` | Colorize the play-by-play (`auto` = only on a terminal) |
 
 ```bash
@@ -104,7 +104,9 @@ There are two bots, chosen with `--bot`:
 - **`mc`** — a stronger [determinized Monte Carlo](https://en.wikipedia.org/wiki/Monte_Carlo_tree_search)
   player. For each card it could play, it deals the unseen cards to the
   opponents at random many times, plays each imagined hand out to the end with
-  the greedy policy, and picks the card with the best *average* result. It bids
+  the greedy policy, and picks the card with the best *average* result. The same
+  sampled deals are reused for every candidate card (Common Random Numbers),
+  which makes the comparison fair and keeps the needed sample count low. It bids
   with the same heuristic but plays much better — at the cost of being far
   slower. Tune the trade-off with `--mc-samples`.
 

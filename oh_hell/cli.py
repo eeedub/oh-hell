@@ -142,7 +142,7 @@ def build_parser() -> argparse.ArgumentParser:
             help="bot type: 'greedy' heuristic (fast) or 'mc' Monte Carlo (stronger, slower)",
         )
         p.add_argument(
-            "--mc-samples", type=int, default=60, help="rollouts per card for the Monte Carlo bot"
+            "--mc-samples", type=int, default=30, help="rollouts per card for the Monte Carlo bot"
         )
         p.add_argument(
             "--color",

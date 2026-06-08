@@ -18,7 +18,6 @@ Bidding still uses the inherited heuristic — only card play is Monte Carlo.
 
 from __future__ import annotations
 
-import math
 import random
 
 from .cards import Card, Suit
@@ -32,11 +31,13 @@ FULL_DECK = [Card(rank, suit) for suit in Suit for rank in range(2, 15)]
 class MonteCarloPlayer(AIPlayer):
     """Plays cards by sampling opponents' hands and rolling out the round.
 
-    ``samples`` is the number of random deals evaluated per candidate card —
-    higher is stronger but slower. Pass an ``rng`` for reproducible play.
+    ``samples`` is the number of random deals evaluated — higher is stronger but
+    slower. Every candidate card is scored against the *same* sampled deals
+    (Common Random Numbers), which lowers the variance of the comparison, so the
+    default can be modest. Pass an ``rng`` for reproducible play.
     """
 
-    def __init__(self, name: str, *, samples: int = 80, rng: random.Random | None = None) -> None:
+    def __init__(self, name: str, *, samples: int = 30, rng: random.Random | None = None) -> None:
         super().__init__(name)
         self.samples = samples
         self._rng = rng or random.Random()
@@ -62,30 +63,38 @@ class MonteCarloPlayer(AIPlayer):
         trick_so_far = [((leader + i) % n, card) for i, (_, card) in enumerate(trick)]
         opp_seats = [s for s in range(n) if s != my_seat]
 
-        best_card, best_value = legal[0], -math.inf
-        for card in legal:
-            my_hand_after = [c for c in self.hand if c != card]
-            total = 0.0
-            for _ in range(self.samples):
-                self._rng.shuffle(pool)
+        # Our hand minus each candidate, precomputed once.
+        my_hands_after = [[c for c in self.hand if c != card] for card in legal]
+        next_seat = (my_seat + 1) % n
+
+        # Common Random Numbers: deal one world per sample and score *every*
+        # candidate card against that same world. Fewer shuffles, and the paired
+        # comparison lowers variance in the choice below.
+        totals = [0.0] * len(legal)
+        for _ in range(self.samples):
+            self._rng.shuffle(pool)
+            opp_hands = {}
+            idx = 0
+            for s in opp_seats:
+                opp_hands[s] = pool[idx:idx + counts[s]]
+                idx += counts[s]
+
+            for ci, card in enumerate(legal):
                 hands: list[list[Card]] = [[] for _ in range(n)]
-                idx = 0
                 for s in opp_seats:
-                    hands[s] = pool[idx:idx + counts[s]]
-                    idx += counts[s]
-                hands[my_seat] = list(my_hand_after)
+                    hands[s] = list(opp_hands[s])  # _play_out mutates, so copy
+                hands[my_seat] = list(my_hands_after[ci])
 
                 tricks_won = list(base_tricks)
                 opening = list(trick_so_far) + [(my_seat, card)]
-                _play_out(hands, tricks_won, trump, bids, n, opening, (my_seat + 1) % n)
+                _play_out(hands, tricks_won, trump, bids, n, opening, next_seat)
 
                 mine = tricks_won[my_seat]
-                total += mine + (EXACT_BONUS if mine == self.bid else 0)
+                totals[ci] += mine + (EXACT_BONUS if mine == self.bid else 0)
 
-            avg = total / self.samples
-            if avg > best_value:
-                best_value, best_card = avg, card
-        return best_card
+        # max keeps the first index on ties -> same "first legal card" tie-break.
+        best_ci = max(range(len(legal)), key=lambda i: totals[i])
+        return legal[best_ci]
 
 
 def _play_out(hands, tricks_won, trump, bids, n, trick, next_seat):
