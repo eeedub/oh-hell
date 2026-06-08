@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 
 from .cards import Card, Deck, Suit
 from .player import Player
+from .render import Renderer
 from .rules import legal_plays, trick_winner_index
 
 DECK_SIZE = 52
@@ -86,12 +87,15 @@ class Game:
     seed: int | None = None
     verbose: bool = False
     output_fn: callable = print
+    renderer: Renderer | None = None
 
     results: list[RoundResult] = field(default_factory=list, init=False)
 
     def __post_init__(self) -> None:
         if not 2 <= len(self.players) <= 7:
             raise ValueError("Oh Hell needs 2-7 players (3-7 recommended)")
+        # Default to a no-color renderer; the CLI supplies a colored one.
+        self.renderer = self.renderer or Renderer(enabled=False)
         self._rng = random.Random(self.seed)
         if self.pattern is None:
             cap = max_hand_size(len(self.players))
@@ -134,9 +138,12 @@ class Game:
         trump_card = deck.deal_one()
         trump = trump_card.suit
 
+        r = self.renderer
+        plural = "s" if hand_size != 1 else ""
         self._say(
-            f"\n=== Round {round_number}: {hand_size} card(s) each, "
-            f"trump {trump} (flipped {trump_card}), dealer {self.players[dealer_index].name} ==="
+            f"\n{r.bold(f'Round {round_number}')}  ·  {hand_size} card{plural} each"
+            f"  ·  trump {r.suit(trump)} {r.card(trump_card)}"
+            f"  ·  dealer {self.players[dealer_index].name}"
         )
 
         self._collect_bids(hand_size, dealer_index, trump)
@@ -166,8 +173,16 @@ class Game:
             )
             player.bid = bid
             bids_so_far.append(bid)
-            self._say(f"  {player.name} bids {bid}")
-        self._say(f"  (total bid {sum(bids_so_far)} vs {hand_size} tricks)")
+
+        r = self.renderer
+        bid_strs = "   ".join(
+            f"{self.players[seat].name} {r.bold(str(self.players[seat].bid))}" for seat in order
+        )
+        total = sum(bids_so_far)
+        # When the bids exactly cover the tricks, someone is guaranteed to miss.
+        note = f"{total} bid / {hand_size} tricks"
+        note = r.accent(note) if total != hand_size else r.bad(note + "  — all bids can't be made")
+        self._say(f"  bids:  {bid_strs}     ({note})")
 
     def _play_tricks(self, hand_size: int, dealer_index: int, trump: Suit) -> None:
         n = len(self.players)
@@ -200,14 +215,18 @@ class Game:
             winner = trick[win_offset][0]
             winner.tricks_won += 1
             leader = self.players.index(winner)
+
+            r = self.renderer
+            plays = "   ".join(f"{p.name} {r.card(c)}" for p, c in trick)
             self._say(
-                f"  Trick {trick_no + 1}: "
-                + "  ".join(f"{p.name}:{c}" for p, c in trick)
-                + f"  -> {winner.name}"
+                f"  {r.dim(f'trick {trick_no + 1:>2}')}  {plays}   "
+                + r.good(f"won by {winner.name}")
             )
 
     def _score_round(self, round_number: int, hand_size: int, trump: Suit) -> RoundResult:
         bids, tricks, round_scores = {}, {}, {}
+        r = self.renderer
+        width = max(len(p.name) for p in self.players)
         for player in self.players:
             made_it = player.tricks_won == player.bid
             gained = player.tricks_won + (self.exact_bonus if made_it else 0)
@@ -215,9 +234,11 @@ class Game:
             bids[player.name] = player.bid
             tricks[player.name] = player.tricks_won
             round_scores[player.name] = gained
+            mark = r.good("✓") if made_it else r.bad("✗")
+            plus = r.bold(f"+{gained}".rjust(3))  # pad before styling to keep columns aligned
             self._say(
-                f"  {player.name}: bid {player.bid}, took {player.tricks_won} "
-                f"-> +{gained} (total {player.score})"
+                f"  {mark} {player.name:<{width}}  bid {player.bid} took {player.tricks_won}"
+                f"   {plus}   total {player.score}"
             )
         return RoundResult(
             round_number=round_number,
@@ -230,8 +251,12 @@ class Game:
         )
 
     def _announce_winner(self) -> None:
+        r = self.renderer
         board = self.standings
-        self._say("\n=== Final standings ===")
+        width = max(len(p.name) for p in self.players)
+        medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+        self._say("\n" + r.bold("Final standings"))
         for rank, player in enumerate(board, start=1):
-            self._say(f"  {rank}. {player.name}: {player.score}")
-        self._say(f"Winner: {board[0].name}!")
+            badge = medals.get(rank, f"{rank}.")
+            self._say(f"  {badge:<2} {player.name:<{width}}  {player.score}")
+        self._say(r.bold(f"🏆 {board[0].name} wins!"))

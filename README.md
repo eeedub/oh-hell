@@ -61,6 +61,7 @@ There are three subcommands: `simulate`, `play`, and `bench`. They share these o
 | `--seed N` | random | Seed the RNG for reproducible games |
 | `--bot {greedy,mc}` | `greedy` | Bot strategy (see [Bot strategies](#bot-strategies)) |
 | `--mc-samples N` | `60` | Rollouts per card for the `mc` bot (higher = stronger, slower) |
+| `--color {auto,always,never}` | `auto` | Colorize the play-by-play (`auto` = only on a terminal) |
 
 ```bash
 # A short 3-player game that climbs 1→5 and back to 1, no hook rule
@@ -69,6 +70,15 @@ python -m oh_hell simulate -p 3 --pattern "1..5..1" --no-hook
 # Reproduce an exact game
 python -m oh_hell simulate --seed 42
 ```
+
+### Output & color
+
+The `simulate` (single game) and `play` commands print a colorized play-by-play:
+cards are colored by suit (♥ red, ♦ blue, ♣ green, ♠ default), the trick winner
+and made bids are highlighted, and the final standings use 🥇🥈🥉 / 🏆. Color
+turns on automatically only when writing to a terminal, so piped or redirected
+output stays plain (it also respects the `NO_COLOR` convention). Force it with
+`--color always` or disable it with `--color never`.
 
 ### Deal patterns
 
@@ -181,6 +191,7 @@ oh_hell/
   montecarlo.py # MonteCarloPlayer: stronger bot via determinized rollouts
   game.py       # the game engine: dealing, bidding, tricks, scoring
   benchmark.py  # measure/compare bot strategies (exact-bid hit rate)
+  render.py     # terminal color / styling for the play-by-play
   cli.py        # command-line interface
 tests/          # pytest suite
 ```

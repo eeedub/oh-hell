@@ -12,6 +12,7 @@ Subclasses answer those however they like. The engine owns the bookkeeping
 from __future__ import annotations
 
 from .cards import Card, Suit
+from .render import Renderer
 from .rules import card_strength, trick_winner_index
 
 
@@ -152,15 +153,16 @@ class AIPlayer(Player):
 class HumanPlayer(Player):
     """Plays via terminal prompts. Used by the interactive CLI mode."""
 
-    def __init__(self, name: str, *, input_fn=input, output_fn=print) -> None:
+    def __init__(self, name: str, *, input_fn=input, output_fn=print, renderer=None) -> None:
         super().__init__(name)
         self._input = input_fn
         self._output = output_fn
+        self._r = renderer or Renderer(enabled=False)
 
     def choose_bid(self, *, trump, hand_size, bids_so_far, is_dealer, forbidden_bid):
-        hand = " ".join(str(c) for c in sorted(self.hand, key=_sort_key))
+        hand = self._r.cards(sorted(self.hand, key=_sort_key))
         self._output(f"\nYour hand: {hand}")
-        self._output(f"Trump: {trump}   Tricks this round: {hand_size}")
+        self._output(f"Trump: {self._r.suit(trump)}   Tricks this round: {hand_size}")
         if bids_so_far:
             self._output(f"Bids so far: {sum(bids_so_far)} (need not match)")
         forbidden = "" if forbidden_bid is None else f" (you may not bid {forbidden_bid} — the hook)"
@@ -180,12 +182,12 @@ class HumanPlayer(Player):
 
     def choose_card(self, *, legal, trick, trump, lead_suit, seen, players=None, leader=0):
         if trick:
-            table = "  ".join(f"{p.name}:{c}" for p, c in trick)
+            table = "   ".join(f"{p.name} {self._r.card(c)}" for p, c in trick)
             self._output(f"\nOn the table: {table}")
         else:
             self._output("\nYou lead this trick.")
         ordered = sorted(legal, key=_sort_key)
-        listing = "  ".join(f"[{i}] {c}" for i, c in enumerate(ordered))
+        listing = "   ".join(f"{self._r.dim(f'[{i}]')} {self._r.card(c)}" for i, c in enumerate(ordered))
         self._output(f"Legal plays (need {self.bid - self.tricks_won} more trick(s)): {listing}")
         while True:
             raw = self._input(f"{self.name}, choose a card 0-{len(ordered) - 1}: ").strip()

@@ -20,6 +20,7 @@ from .benchmark import run_benchmark
 from .game import Game, max_hand_size
 from .montecarlo import MonteCarloPlayer
 from .player import AIPlayer, HumanPlayer
+from .render import Renderer, should_color
 
 
 def _bot_names(n: int) -> list[str]:
@@ -34,8 +35,13 @@ def make_bot(args: argparse.Namespace, name: str) -> AIPlayer:
     return AIPlayer(name)
 
 
+def make_renderer(args: argparse.Namespace) -> Renderer:
+    return Renderer(enabled=should_color(getattr(args, "color", "auto")))
+
+
 def cmd_simulate(args: argparse.Namespace) -> int:
     if args.games == 1:
+        renderer = make_renderer(args)
         players = [make_bot(args, name) for name in _bot_names(args.players)]
         game = Game(
             players,
@@ -43,7 +49,9 @@ def cmd_simulate(args: argparse.Namespace) -> int:
             hook=not args.no_hook,
             seed=args.seed,
             verbose=True,
+            renderer=renderer,
         )
+        print(renderer.bold("🃏 Oh Hell"))
         game.play()
         return 0
 
@@ -65,7 +73,8 @@ def cmd_simulate(args: argparse.Namespace) -> int:
 
 def cmd_play(args: argparse.Namespace) -> int:
     name = args.name or "You"
-    players = [HumanPlayer(name)]
+    renderer = make_renderer(args)
+    players = [HumanPlayer(name, renderer=renderer)]
     players += [make_bot(args, n) for n in _bot_names(args.players)[: args.players - 1]]
 
     game = Game(
@@ -74,8 +83,9 @@ def cmd_play(args: argparse.Namespace) -> int:
         hook=not args.no_hook,
         seed=args.seed,
         verbose=True,
+        renderer=renderer,
     )
-    print("Welcome to Oh Hell! You're playing against the bots.\n")
+    print(renderer.bold("🃏 Welcome to Oh Hell!") + " You're playing against the bots.")
     game.play()
     print(f"\nThanks for playing, {name}.")
     return 0
@@ -133,6 +143,12 @@ def build_parser() -> argparse.ArgumentParser:
         )
         p.add_argument(
             "--mc-samples", type=int, default=60, help="rollouts per card for the Monte Carlo bot"
+        )
+        p.add_argument(
+            "--color",
+            choices=["auto", "always", "never"],
+            default="auto",
+            help="colorize output (auto: only when writing to a terminal)",
         )
 
     sim = sub.add_parser("simulate", help="watch bots play")
