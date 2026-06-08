@@ -15,6 +15,72 @@ from .cards import Card, Suit
 from .rules import card_strength, trick_winner_index
 
 
+def card_value(card: Card, trump: Suit) -> float:
+    """Rough probability that a card wins a trick, ignoring trick context.
+
+    Used both for bidding (summing a hand's values) and for judging which card
+    is most "dangerous" to keep when shedding losers.
+    """
+    if card.suit == trump:
+        if card.rank >= 13:
+            return 0.95
+        if card.rank >= 11:
+            return 0.75
+        if card.rank >= 8:
+            return 0.5
+        return 0.3
+    # Off-suit: only the very top cards are reliable winners.
+    if card.rank == 14:
+        return 0.85
+    if card.rank == 13:
+        return 0.55
+    if card.rank == 12:
+        return 0.25
+    return 0.0
+
+
+def greedy_play(
+    legal: list[Card],
+    trick_cards: list[Card],
+    trump: Suit,
+    bid: int,
+    tricks_won: int,
+) -> Card:
+    """The heuristic card-play policy as a pure function.
+
+    ``legal`` are the cards we may play (in hand order); ``trick_cards`` are the
+    cards already on the table this trick, in play order. This is the shared
+    rollout policy used by both :class:`AIPlayer` and the Monte Carlo simulator.
+    """
+    needs_more = tricks_won < bid
+
+    if not trick_cards:
+        # Leading: strongest if chasing, weakest if avoiding. (The reference
+        # suit is our first legal card, matching the original heuristic.)
+        ref = legal[0].suit
+        chooser = max if needs_more else min
+        return chooser(legal, key=lambda c: card_strength(c, trump, ref))
+
+    lead = trick_cards[0].suit
+    winning_card = trick_cards[trick_winner_index(trick_cards, trump)]
+    winners = [
+        c for c in legal
+        if card_strength(c, trump, lead) > card_strength(winning_card, trump, lead)
+    ]
+
+    if needs_more:
+        # Still chasing: win as cheaply as possible, else play low and keep highs.
+        if winners:
+            return min(winners, key=lambda c: card_strength(c, trump, lead))
+        return min(legal, key=lambda c: card_strength(c, trump, lead))
+
+    # Bid already made: "duck high" — shed the most dangerous card that loses.
+    losers = [c for c in legal if c not in winners]
+    if losers:
+        return max(losers, key=lambda c: card_value(c, trump))
+    return min(legal, key=lambda c: card_strength(c, trump, lead))
+
+
 class Player:
     """Common state and the interface the game engine calls into."""
 
@@ -50,6 +116,8 @@ class Player:
         trump: Suit,
         lead_suit: Suit | None,
         seen: list[Card],
+        players: list["Player"] | None = None,
+        leader: int = 0,
     ) -> Card:
         raise NotImplementedError
 
@@ -61,7 +129,7 @@ class AIPlayer(Player):
     """A simple heuristic bot. Good enough to give a real game; not optimal."""
 
     def choose_bid(self, *, trump, hand_size, bids_so_far, is_dealer, forbidden_bid):
-        expected = sum(self._card_value(card, trump) for card in self.hand)
+        expected = sum(card_value(card, trump) for card in self.hand)
         bid = round(expected)
         bid = max(0, min(hand_size, bid))
 
@@ -75,74 +143,10 @@ class AIPlayer(Player):
                 bid = max(0, lower)
         return bid
 
-    @staticmethod
-    def _card_value(card: Card, trump: Suit) -> float:
-        """Rough probability this card wins a trick."""
-        if card.suit == trump:
-            if card.rank >= 13:
-                return 0.95
-            if card.rank >= 11:
-                return 0.75
-            if card.rank >= 8:
-                return 0.5
-            return 0.3
-        # Off-suit: only the very top cards are reliable winners.
-        if card.rank == 14:
-            return 0.85
-        if card.rank == 13:
-            return 0.55
-        if card.rank == 12:
-            return 0.25
-        return 0.0
-
-    def choose_card(self, *, legal, trick, trump, lead_suit, seen):
-        # ``seen`` (cards already played this round) is available for strategies
-        # that want to count cards; this heuristic doesn't need it.
-        needs_more = self.tricks_won < self.bid
-
-        # Cards currently on the table, in play order.
-        played = [card for _, card in trick]
-
-        if not played:
-            # Leading: if we still need tricks, lead our strongest card; if we
-            # have made our bid, lead our weakest to shed losers.
-            return self._strongest(legal, trump, lead_suit=None) if needs_more \
-                else self._weakest(legal, trump, lead_suit=None)
-
-        current_lead = trick[0][1].suit
-        winning_card = played[trick_winner_index(played, trump)]
-        winners = [c for c in legal if self._beats(c, winning_card, trump, current_lead)]
-
-        if needs_more:
-            # Still chasing tricks: win as cheaply as possible if we can,
-            # otherwise play low and keep our high cards for a later trick.
-            if winners:
-                return min(winners, key=lambda c: card_strength(c, trump, current_lead))
-            return self._weakest(legal, trump, lead_suit=current_lead)
-
-        # We've made our bid and want no more tricks. "Duck high": play the
-        # highest card that still loses, shedding whatever is most likely to win
-        # an unwanted trick later. If every legal card would win, take it as
-        # cheaply as possible.
-        losers = [c for c in legal if c not in winners]
-        if losers:
-            return max(losers, key=lambda c: self._card_value(c, trump))
-        return min(legal, key=lambda c: card_strength(c, trump, current_lead))
-
-    # --- helpers ---------------------------------------------------------
-    @staticmethod
-    def _beats(card: Card, other: Card, trump: Suit, lead_suit: Suit) -> bool:
-        return card_strength(card, trump, lead_suit) > card_strength(other, trump, lead_suit)
-
-    @staticmethod
-    def _strongest(cards, trump, lead_suit):
-        ref = lead_suit if lead_suit is not None else cards[0].suit
-        return max(cards, key=lambda c: card_strength(c, trump, ref))
-
-    @staticmethod
-    def _weakest(cards, trump, lead_suit):
-        ref = lead_suit if lead_suit is not None else cards[0].suit
-        return min(cards, key=lambda c: card_strength(c, trump, ref))
+    def choose_card(self, *, legal, trick, trump, lead_suit, seen, players=None, leader=0):
+        # The greedy heuristic ignores ``seen``/``players``; those are here for
+        # smarter strategies (e.g. the Monte Carlo player) that subclass this.
+        return greedy_play(legal, [c for _, c in trick], trump, self.bid, self.tricks_won)
 
 
 class HumanPlayer(Player):
@@ -174,7 +178,7 @@ class HumanPlayer(Player):
                 continue
             return bid
 
-    def choose_card(self, *, legal, trick, trump, lead_suit, seen):
+    def choose_card(self, *, legal, trick, trump, lead_suit, seen, players=None, leader=0):
         if trick:
             table = "  ".join(f"{p.name}:{c}" for p, c in trick)
             self._output(f"\nOn the table: {table}")

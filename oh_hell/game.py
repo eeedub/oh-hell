@@ -185,6 +185,8 @@ class Game:
                     trump=trump,
                     lead_suit=lead_suit,
                     seen=list(seen),
+                    players=self.players,
+                    leader=leader,
                 )
                 if card not in legal:
                     raise ValueError(f"{player.name} played illegal card {card}")

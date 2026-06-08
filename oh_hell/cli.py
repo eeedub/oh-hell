@@ -1,11 +1,13 @@
 """Command-line interface for the Oh Hell simulator.
 
-Two subcommands::
+Three subcommands::
 
     oh-hell simulate   # bots play a full game (or many, for statistics)
     oh-hell play       # you play against the bots in the terminal
+    oh-hell bench      # measure bot quality (exact-bid hit rate)
 
-Run ``python -m oh_hell --help`` for all options.
+Use ``--bot mc`` for the stronger Monte Carlo bots. Run
+``python -m oh_hell --help`` for all options.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from collections import Counter
 
 from .benchmark import run_benchmark
 from .game import Game, max_hand_size
+from .montecarlo import MonteCarloPlayer
 from .player import AIPlayer, HumanPlayer
 
 
@@ -24,9 +27,16 @@ def _bot_names(n: int) -> list[str]:
     return pool[:n]
 
 
+def make_bot(args: argparse.Namespace, name: str) -> AIPlayer:
+    """Build a bot of the type selected on the command line."""
+    if getattr(args, "bot", "greedy") == "mc":
+        return MonteCarloPlayer(name, samples=args.mc_samples)
+    return AIPlayer(name)
+
+
 def cmd_simulate(args: argparse.Namespace) -> int:
     if args.games == 1:
-        players = [AIPlayer(name) for name in _bot_names(args.players)]
+        players = [make_bot(args, name) for name in _bot_names(args.players)]
         game = Game(
             players,
             pattern=args.pattern,
@@ -40,7 +50,7 @@ def cmd_simulate(args: argparse.Namespace) -> int:
     # Many games: stay quiet and report how often each seat wins.
     wins: Counter[str] = Counter()
     for i in range(args.games):
-        players = [AIPlayer(name) for name in _bot_names(args.players)]
+        players = [make_bot(args, name) for name in _bot_names(args.players)]
         seed = None if args.seed is None else args.seed + i
         game = Game(players, pattern=args.pattern, hook=not args.no_hook, seed=seed)
         game.play()
@@ -56,7 +66,7 @@ def cmd_simulate(args: argparse.Namespace) -> int:
 def cmd_play(args: argparse.Namespace) -> int:
     name = args.name or "You"
     players = [HumanPlayer(name)]
-    players += [AIPlayer(n) for n in _bot_names(args.players)[: args.players - 1]]
+    players += [make_bot(args, n) for n in _bot_names(args.players)[: args.players - 1]]
 
     game = Game(
         players,
@@ -75,6 +85,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
     # A fixed seed by default keeps the benchmark reproducible run-to-run.
     seed = 0 if args.seed is None else args.seed
     result = run_benchmark(
+        strategy=lambda name: make_bot(args, name),
         games=args.games,
         players=args.players,
         pattern=args.pattern,
@@ -114,6 +125,15 @@ def build_parser() -> argparse.ArgumentParser:
         )
         p.add_argument("--no-hook", action="store_true", help="disable the dealer 'hook' rule")
         p.add_argument("--seed", type=int, default=None, help="RNG seed for reproducible games")
+        p.add_argument(
+            "--bot",
+            choices=["greedy", "mc"],
+            default="greedy",
+            help="bot type: 'greedy' heuristic (fast) or 'mc' Monte Carlo (stronger, slower)",
+        )
+        p.add_argument(
+            "--mc-samples", type=int, default=60, help="rollouts per card for the Monte Carlo bot"
+        )
 
     sim = sub.add_parser("simulate", help="watch bots play")
     add_common(sim)

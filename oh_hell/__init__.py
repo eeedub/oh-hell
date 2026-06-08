@@ -8,6 +8,7 @@ Public API re-exports so callers can do, e.g.::
 from .cards import Card, Suit, Deck, RANK_NAMES
 from .player import Player, AIPlayer, HumanPlayer
 from .game import Game, RoundResult, deal_pattern
+from .montecarlo import MonteCarloPlayer
 
 __all__ = [
     "Card",
@@ -17,6 +18,7 @@ __all__ = [
     "Player",
     "AIPlayer",
     "HumanPlayer",
+    "MonteCarloPlayer",
     "Game",
     "RoundResult",
     "deal_pattern",

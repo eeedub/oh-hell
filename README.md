@@ -32,6 +32,9 @@ python -m oh_hell simulate
 # Play against three bots
 python -m oh_hell play
 
+# Play against the stronger Monte Carlo bots
+python -m oh_hell play --bot mc
+
 # Simulate 1000 games and see how often each seat wins
 python -m oh_hell simulate --games 1000
 
@@ -56,6 +59,8 @@ There are three subcommands: `simulate`, `play`, and `bench`. They share these o
 | `--pattern SPEC` | `1..max..1` | Cards-per-round pattern, e.g. `10..1..10` or `1..7` |
 | `--no-hook` | off | Disable "the hook" (the dealer's bid restriction) |
 | `--seed N` | random | Seed the RNG for reproducible games |
+| `--bot {greedy,mc}` | `greedy` | Bot strategy (see [Bot strategies](#bot-strategies)) |
+| `--mc-samples N` | `60` | Rollouts per card for the `mc` bot (higher = stronger, slower) |
 
 ```bash
 # A short 3-player game that climbs 1→5 and back to 1, no hook rule
@@ -75,6 +80,30 @@ waypoint to the next:
 
 Hand sizes are automatically clamped to what a 52-card deck allows for the
 player count (one card is always reserved to flip for trump).
+
+## Bot strategies
+
+There are two bots, chosen with `--bot`:
+
+- **`greedy`** (default) — a fast heuristic. It estimates its bid by adding up
+  each card's chance of winning, and plays simply: win tricks cheaply while it
+  still needs them, and once its bid is made, "duck high" by shedding its most
+  dangerous card on tricks it doesn't want.
+
+- **`mc`** — a stronger [determinized Monte Carlo](https://en.wikipedia.org/wiki/Monte_Carlo_tree_search)
+  player. For each card it could play, it deals the unseen cards to the
+  opponents at random many times, plays each imagined hand out to the end with
+  the greedy policy, and picks the card with the best *average* result. It bids
+  with the same heuristic but plays much better — at the cost of being far
+  slower. Tune the trade-off with `--mc-samples`.
+
+In head-to-head benchmarking the Monte Carlo bot beats the greedy bot by roughly
+**6–7 points of exact-bid hit rate**. It's slow, so benchmark it over fewer
+games:
+
+```bash
+python -m oh_hell bench --bot mc --mc-samples 40 --games 100
+```
 
 ## Measuring the bot (benchmarking)
 
@@ -128,6 +157,11 @@ Two lessons this harness taught the project, both by measurement:
 > version of it actually *lost* points by throwing away cards the bot still
 > needed; the benchmark caught that before it shipped.)
 
+> Several further card-play heuristics (smarter leading, position-aware
+> following) were measured and **dropped** because they didn't help. The next
+> real gain came from a different *kind* of player — the Monte Carlo bot — which
+> beat the greedy bot by about **6–7 points** of hit rate.
+
 Always benchmark the change instead of trusting the intuition.
 
 ## The hook rule
@@ -143,11 +177,12 @@ guarantees at least one player misses their bid each round. Turn it off with
 oh_hell/
   cards.py    # Card, Suit, Deck
   rules.py    # pure rule helpers (legal plays, trick winner)
-  player.py    # Player base class, AIPlayer bot, HumanPlayer
-  game.py      # the game engine: dealing, bidding, tricks, scoring
-  benchmark.py # measure/compare bot strategies (exact-bid hit rate)
-  cli.py       # command-line interface
-tests/         # pytest suite
+  player.py     # Player base, greedy AIPlayer bot, HumanPlayer, shared policy
+  montecarlo.py # MonteCarloPlayer: stronger bot via determinized rollouts
+  game.py       # the game engine: dealing, bidding, tricks, scoring
+  benchmark.py  # measure/compare bot strategies (exact-bid hit rate)
+  cli.py        # command-line interface
+tests/          # pytest suite
 ```
 
 The engine is usable as a library too:
